@@ -1,0 +1,43 @@
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+
+# Local History for Visual Studio Code
+.history/
+
+# Built Visual Studio Code Extensions
+*.vsix
+
+__pycache__/
+.ipynb_checkpoints/
+*.py[cod]
+*.egg-info
+ignored/
+*.npy
+.env
+.editorconfig
+.DS_Store
+*.pyc
+
+# Local Test Code
+test_notebook.ipynb
+test_file.py
+.env
+test.ipynb
+
+# Data
+data/*
+ckpts/*
+
+# Documentation
+docs/_build/
+
+# Running Logs (track them manually)
+runs/*
+
+# Local Scripts
+scripts/generate_requirements.sh
+
