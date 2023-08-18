@@ -2,13 +2,41 @@
 This file contains the JAX implementation of the layers,
 as well as basic building blocks, used in the model.
 """
-from typing import Any, Optional, Union
-from jaxtyping import Array, ArrayLike
+# TODO: adapt this to new data structure next
+
+from typing import Any, Optional, Union, Callable
+from jax.typing import ArrayLike
+from jax import Array
 
 from functools import partial
 import haiku as hk
 import jax
 import jax.numpy as jnp
+
+from src.data_handling.data_structures import GraphsTuple
+
+
+def get_aggregation_fn(aggregation_fn: Optional[str] = "sum") -> Callable:
+    """
+    Returns the aggregation function.
+
+    Args:
+        aggregation_fn: Aggregation function to use.
+
+    Returns:
+        Aggregation function: Callable function with signature
+            (data, segment_ids, num_segments=None)
+    """
+    if aggregation_fn == "sum":
+        fn = jax.ops.segment_sum
+    elif aggregation_fn == "mean":
+        fn = jax.ops.segment_mean
+    elif aggregation_fn == "max":
+        fn = jax.ops.segment_max
+    else:
+        raise RuntimeError(f"Invalid aggregation function: {aggregation_fn}")
+
+    return fn
 
 
 class _Residual(hk.Module):
@@ -26,6 +54,7 @@ class _Residual(hk.Module):
         """
         Args:
             x: Input to the module.
+
         Returns:
             Output of the module.
         """
@@ -56,10 +85,11 @@ class _Act(hk.Module):
         else:
             raise RuntimeError(f"Invalid activation function: {activation}")
 
-    def __call__(self, x: jnp.ndarray, **kwargs) -> jnp.ndarray:
+    def __call__(self, x: ArrayLike, **kwargs) -> Array:
         """
         Args:
             x: Input to the activation function.
+
         Returns:
             Output of the activation function.
         """
@@ -161,13 +191,14 @@ class MLP(hk.Module):
             output_size, name=f"linear_{n_layers - 1}")
 
     def __call__(
-        self, x: jnp.ndarray, is_training: Optional[bool] = False
-    ) -> jnp.ndarray:
+        self, x: ArrayLike, is_training: Optional[bool] = False
+    ) -> Array:
         """
         Args:
             x: Input tensor.
             is_training: Whether the model is in training mode.
                 For haiku initialization, this argument needs to be set to True.
+
         Returns:
             Output tensor.
         """
@@ -226,8 +257,8 @@ class _EdgeBlock(hk.Module):
         self.fixed_edge_attributes = fixed_edge_attributes
 
     def __call__(
-        self, graph: jraph.GraphsTuple, is_training: Optional[bool] = True
-    ) -> jraph.GraphsTuple:
+        self, graph: GraphsTuple, is_training: Optional[bool] = True
+    ) -> GraphsTuple:
         """
         Args:
             graph: GraphsTuple object. When using fixed edge attributes,
@@ -235,6 +266,7 @@ class _EdgeBlock(hk.Module):
                 are assumed to be the fixed edge attributes.
             is_training: Whether the model is in training mode.
                 For haiku initialization, this argument needs to be set to True.
+
         Returns:
             GraphsTuple object after the edge update.
         """
@@ -304,16 +336,11 @@ class _NodeBlock(hk.Module):
             input_size, node_output_size, name="node_update_mlp", **kwargs
         )
 
-        if max_nodes is None:
-            self.aggregation_fn = get_aggregation_fn(aggregation)
-        else:
-            self.aggregation_fn = partial(
-                get_aggregation_fn(aggregation), num_segments=max_nodes
-            )
+        self.aggregation_fn = get_aggregation_fn(aggregation)
 
     def __call__(
-        self, graph: jraph.GraphsTuple, is_training: Optional[bool] = False
-    ) -> jraph.GraphsTuple:
+        self, graph: GraphsTuple, is_training: Optional[bool] = False
+    ) -> GraphsTuple:
         """
         Args:
             graph: GraphsTuple object. If the graph has fixed node attributes,
@@ -321,12 +348,15 @@ class _NodeBlock(hk.Module):
                 are assumed to be fixed.
             is_training: Whether the model is in training mode.
                 For haiku initialization, this argument needs to be set to True.
+
         Returns:
             GraphsTuple object after the node update.
         """
         node_features = graph.nodes.latent
         aggregated_edge_features = self.aggregation_fn(
-            data=graph.edges.latent, segment_ids=graph.receivers
+            data=graph.edges.latent,
+            segment_ids=graph.receivers,
+            num_segments=graph.nodes.latent.shape[0]
         )
         updated_node_features = self.node_update_mlp(
             jnp.concatenate(
@@ -437,13 +467,14 @@ class MessagePassingLayer(hk.Module):
         )
 
     def __call__(
-        self, graph: jraph.GraphsTuple, is_training: Optional[bool] = False
-    ) -> jraph.GraphsTuple:
+        self, graph: GraphsTuple, is_training: Optional[bool] = False
+    ) -> GraphsTuple:
         """
         Args:
             graph: GraphsTuple object.
             is_training: Whether the model is in training mode.
                 For haiku initialization, this argument needs to be set to True.
+
         Returns:
             GraphsTuple object after the message passing step.
         """
@@ -505,8 +536,8 @@ class _Encoder(hk.Module):
         )
 
     def __call__(
-        self, graph: jraph.GraphsTuple, is_training: Optional[bool] = False
-    ) -> jraph.GraphsTuple:
+        self, graph: GraphsTuple, is_training: Optional[bool] = False
+    ) -> GraphsTuple:
         """
         Args:
             graph: GraphsTuple object. If the graph has fixed node attributes,
@@ -514,6 +545,7 @@ class _Encoder(hk.Module):
                 to be fixed.
             is_training: Whether the network is in training mode.
                 Needs to be true during the haiku init call.
+
         Returns:
             GraphsTuple object after the encoding.
         """
@@ -631,8 +663,8 @@ class _Processor(hk.Module):
                 )
 
     def __call__(
-        self, graph: jraph.GraphsTuple, is_training: Optional[bool] = False
-    ) -> jraph.GraphsTuple:
+        self, graph: GraphsTuple, is_training: Optional[bool] = False
+    ) -> GraphsTuple:
         """
         Args:
             graph: GraphsTuple object. If the graph has fixed node attributes,
@@ -640,6 +672,7 @@ class _Processor(hk.Module):
                 assumed to be fixed.
             is_training: Whether the network is in training mode. Needs to be true
                 during the haiku init call.
+
         Returns:
             GraphsTuple object after the processing.
         """
@@ -683,8 +716,8 @@ class _Decoder(hk.Module):
             node_input_size, node_output_size, **node_decoder_kwargs)
 
     def __call__(
-        self, graph: jraph.GraphsTuple, is_training: Optional[bool] = False
-    ) -> jraph.GraphsTuple:
+        self, graph: GraphsTuple, is_training: Optional[bool] = False
+    ) -> GraphsTuple:
         """
         Args:
             graph: GraphsTuple object. If the graph has fixed node attributes,
@@ -692,6 +725,7 @@ class _Decoder(hk.Module):
                 to be fixed.
             is_training: Whether the model is in training model.
                 Needs to be set to True for haiku initializers to work.
+
         Returns:
             GraphsTuple object after the decoding.
         """
@@ -826,8 +860,8 @@ class EncoderProcessorDecoder(hk.Module):
         )
 
     def __call__(
-        self, graph: jraph.GraphsTuple, is_training: Optional[bool] = False
-    ) -> jraph.GraphsTuple:
+        self, graph: GraphsTuple, is_training: Optional[bool] = False
+    ) -> GraphsTuple:
         """
         Args:
             graph: GraphsTuple object. If the graph has fixed node attributes,
@@ -835,6 +869,7 @@ class EncoderProcessorDecoder(hk.Module):
                 to be fixed.
             is_training: Whether the model is in training model.
                 Needs to be set to True for haiku initializers to work.
+
         Returns:
             GraphsTuple object after the processing.
         """

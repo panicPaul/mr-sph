@@ -1,10 +1,14 @@
 """ This file contains all the data structures used in the project."""
 
 from typing import NamedTuple, Optional
-from jax.typing import ArrayLike, Array
-
+from jax.typing import ArrayLike
+from jax import Array
+from jax.tree_util import tree_map
+from jax import vmap
 
 # --------------------------- Graph data structures ---------------------------
+
+
 class NodeFeatures(NamedTuple):
     """
     Node features.
@@ -12,10 +16,12 @@ class NodeFeatures(NamedTuple):
     Attributes:
         - latent: Latent representation of the node. Shape (n_nodes, latent_dim)
         - position: Position of the node. Shape (n_nodes, spatial_dim)
+        - position_history: Position history of the node. Shape
+            (n_nodes, sequence_length - 1, spatial_dim)
         - is_padding: Whether the node is padding. Shape (n_nodes, )
-        - coarse_score: Coarse score of the node. Shape (n_nodes, )
         - original_id: Original index of the node. Shape (n_nodes, ) for fine nodes
             and (n_nodes, 4) for coarse nodes.
+        - coarse_score: Coarse score of the node. Shape (n_nodes, )
         - acceleration_mean: Mean of the acceleration of the node. Shape (n_nodes, )
         - acceleration_covariance: Covariance of the acceleration of the node. Shape
             (n_nodes, spatial_dim, spatial_dim)
@@ -24,10 +30,11 @@ class NodeFeatures(NamedTuple):
 
     latent: ArrayLike = None
     position: ArrayLike = None
+    position_history: ArrayLike = None
     is_padding: ArrayLike = None
 
+    original_id: ArrayLike = None
     coarse_score: Optional[Array] = None
-    original_id: Optional[Array] = None
 
     acceleration_mean: Optional[Array] = None
     acceleration_covariance: Optional[Array] = None
@@ -40,10 +47,14 @@ class EdgeFeatures(NamedTuple):
 
     Attributes:
         - latent: Latent representation of the edge. Shape (n_edges, latent_dim)
+        - distance: Distance between the nodes. Shape (n_edges, )
+        - displacement: Displacement between the nodes. Shape (n_edges, spatial_dim)
         - is_padding: Whether the edge is padding. Shape (n_edges, )
     """
 
     latent: Array = None
+    distance: Array = None
+    displacement: Array = None
     is_padding: ArrayLike = None
 
 
@@ -54,9 +65,9 @@ class GraphsTuple(NamedTuple):
     Attributes:
         - senders: Senders of the edges. Shape (n_edges, )
         - receivers: Receivers of the edges. Shape (n_edges, )
-        - fine_nodes: Fine nodes of the graph.
-        - coarse_nodes: Coarse nodes of the graph.
+        - nodes: NodeFeatures
         - edges: EdgeFeatures
+        - coarse_particle_count: Number of coarse particles in the graph.
 
     Methods:
         - get_latent_graph: Returns a graph with only latent features.
@@ -68,9 +79,9 @@ class GraphsTuple(NamedTuple):
 
     senders: ArrayLike
     receivers: ArrayLike
-    fine_nodes: NodeFeatures
-    coarse_nodes: NodeFeatures
+    nodes: NodeFeatures
     edges: EdgeFeatures
+    coarse_particle_count: int = 0
 
     def get_latent_graph(self) -> 'GraphsTuple':
         """Returns a graph with only latent features."""
@@ -110,3 +121,53 @@ class GraphsTuple(NamedTuple):
         return self._replace(fine_nodes=fine_nodes,
                              coarse_nodes=coarse_nodes,
                              edges=edges)
+
+    def fine_nodes(self) -> NodeFeatures:
+        """ Returns the fine nodes. """
+
+        nodes = self.nodes._asdict()
+
+        if self.nodes.latent is None:
+            nodes.pop('latent')
+        if self.nodes.coarse_score is None:
+            nodes.pop('coarse_score')
+        if self.nodes.acceleration_mean is None:
+            nodes.pop('acceleration_mean')
+        if self.nodes.acceleration_covariance is None:
+            nodes.pop('acceleration_covariance')
+        if self.nodes.target_position is None:
+            nodes.pop('target_position')
+
+        if self.nodes.position.ndim == 2:
+            nodes = tree_map(
+                lambda x: x[:-self.coarse_particle_count], nodes)
+        else:
+            nodes = tree_map(
+                lambda x: x[:, :-self.coarse_particle_count], nodes)
+
+        return NodeFeatures(**nodes)
+
+    def coarse_nodes(self) -> NodeFeatures:
+        """ Returns the coarse nodes. """
+
+        nodes = self.nodes._asdict()
+
+        if self.nodes.latent is None:
+            nodes.pop('latent')
+        if self.nodes.coarse_score is None:
+            nodes.pop('coarse_score')
+        if self.nodes.acceleration_mean is None:
+            nodes.pop('acceleration_mean')
+        if self.nodes.acceleration_covariance is None:
+            nodes.pop('acceleration_covariance')
+        if self.nodes.target_position is None:
+            nodes.pop('target_position')
+
+        if self.nodes.position.ndim == 2:
+            nodes = tree_map(
+                lambda x: x[-self.coarse_particle_count:], nodes)
+        else:
+            nodes = tree_map(
+                lambda x: x[:, -self.coarse_particle_count:], nodes)
+
+        return NodeFeatures(**nodes)
