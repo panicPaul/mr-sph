@@ -57,7 +57,7 @@ def merge_and_split(
     current_merge_candidate_index = merge_order[merge_check_iter]
     
     while (scores_fine[current_merge_candidate_index] > merge_threshold):
-        
+        # TODO; update edge list 
         if scores_fine[current_merge_candidate_index] == jnp.inf:
             merge_check_iter+=1 
             current_merge_candidate_index = merge_order[merge_check_iter]
@@ -118,7 +118,7 @@ def merge_and_split(
     top_split_candidate_index = split_order[split_check_iter]
     
     while (scores_coarse[top_split_candidate_index] > split_threshold):
-        # Splitting
+        # Splitting 
         new_fine_positions = split_position(position_coarse[top_split_candidate_index], 
                                                 settings)
         
