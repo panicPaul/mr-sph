@@ -11,16 +11,15 @@ class NodeFeatures(NamedTuple):
 
     Attributes:
         - latent: Latent representation of the node. Shape (n_nodes, latent_dim)
-        - position: Position of the node. Shape (t, n_nodes, spatial_dim)
-        - acceleration_mean: Mean acceleration of the node. Shape
-            (t, n_nodes, spatial_dim)
+        - position: Position of the node. Shape (n_nodes, spatial_dim)
+        - is_padding: Whether the node is padding. Shape (n_nodes, )
+        - coarse_score: Coarse score of the node. Shape (n_nodes, )
+        - original_id: Original index of the node. Shape (n_nodes, ) for fine nodes
+            and (n_nodes, 4) for coarse nodes.
+        - acceleration_mean: Mean of the acceleration of the node. Shape (n_nodes, )
         - acceleration_covariance: Covariance of the acceleration of the node. Shape
-            (t, n_nodes, spatial_dim, spatial_dim)
-        - mass: Mass of the node. Shape (n_nodes, )
-        - is_coarse: Particle type of the node. Shape (n_nodes, )
+            (n_nodes, spatial_dim, spatial_dim)
         - target_position: Target position of the node. Shape (n_nodes, spatial_dim)
-        - coarse_score: Probability of the node being in the coarse region. Shape
-            (n_nodes, )
     """
 
     latent: ArrayLike = None
@@ -28,6 +27,7 @@ class NodeFeatures(NamedTuple):
     is_padding: ArrayLike = None
 
     coarse_score: Optional[Array] = None
+    original_id: Optional[Array] = None
 
     acceleration_mean: Optional[Array] = None
     acceleration_covariance: Optional[Array] = None
