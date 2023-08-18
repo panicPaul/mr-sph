@@ -1,0 +1,9 @@
+# Simple test configuration file
+
+data:
+  dataset: 'rpf'
+  path: 'data/2D_RPF'
+  sequence_length: 10
+  edge_capacity: 30_000
+  dt: 1.0
+  fine_radius_cutoff: 0.036
