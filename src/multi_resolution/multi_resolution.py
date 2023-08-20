@@ -19,6 +19,14 @@ def merge_and_split(nodes: NodeFeatures,
     into four to keep the number of nodes constant.
 
     Args:
+        - nodes: Node features of the graph.
+        - edges: Edge features of the graph.
+        - merge_score: Score for merging nodes. Assumed to be sorted in ascending order.
+        - split_score: Score for splitting nodes. Assumed to be sorted in ascending 
+            order.
+        - merge_idx: Index of the node to merge.
+        - split_idx: Index of the node to split.
+        - merge_threshold: Threshold for merging nodes.
     """
     # skip if we don't need to execute
     if merge_score[merge_idx] == jnp.inf:
